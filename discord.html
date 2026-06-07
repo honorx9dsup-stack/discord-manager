@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مدير حسابات ديسكورد</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white">
+
+<div class="container mx-auto p-4 max-w-4xl">
+    <h1 class="text-2xl md:text-3xl font-bold mb-6 text-center">🎮 مدير حسابات ديسكورد</h1>
+
+    <div class="bg-gray-800 rounded-lg p-4 md:p-6 mb-6">
+        <h2 class="text-lg md:text-xl font-bold mb-3">➕ إضافة حساب</h2>
+        <div class="flex flex-col md:flex-row gap-3">
+            <input type="email" id="email" placeholder="البريد الإلكتروني" class="flex-1 p-3 rounded bg-gray-700 text-white">
+            <input type="text" id="token" placeholder="Token" class="flex-1 p-3 rounded bg-gray-700 text-white">
+            <button onclick="addAccount()" class="bg-green-600 px-6 py-3 rounded hover:bg-green-700">إضافة</button>
+        </div>
+        <button onclick="checkAllTokens()" class="w-full mt-3 bg-blue-600 px-6 py-3 rounded hover:bg-blue-700">🔄 فحص جميع التوكنات</button>
+    </div>
+
+    <div class="bg-gray-800 rounded-lg overflow-x-auto">
+        <table class="w-full text-sm md:text-base">
+            <thead class="bg-gray-700">
+                <tr>
+                    <th class="p-3 text-right">البريد</th>
+                    <th class="p-3 text-right">Token</th>
+                    <th class="p-3 text-right">الحالة</th>
+                    <th class="p-3 text-right">إجراء</th>
+                </tr>
+            </thead>
+            <tbody id="accounts-table">
+                <tr><td colspan="4" class="text-center p-4">لا توجد حسابات</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function loadAccounts() {
+        const accounts = JSON.parse(localStorage.getItem('accounts') || '[]');
+        const tbody = document.getElementById('accounts-table');
+        
+        if (accounts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4">لا توجد حسابات</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = accounts.map((acc, index) => `
+            <tr class="border-t border-gray-700">
+                <td class="p-3 break-all">${acc.email}</td>
+                <td class="p-3 font-mono text-xs break-all">${acc.token.substring(0, 20)}...</td>
+                <td class="p-3">
+                    <span class="px-2 py-1 rounded text-xs ${acc.status === '✅ شغال' ? 'bg-green-700' : (acc.status === '❌ توكن فاسد' ? 'bg-red-700' : 'bg-gray-700')}">
+                        ${acc.status || '❓ غير معروف'}
+                    </span>
+                </td>
+                <td class="p-3">
+                    <button onclick="deleteAccount(${index})" class="bg-red-600 px-3 py-1 rounded text-sm">حذف</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    function addAccount() {
+        const email = document.getElementById('email').value;
+        const token = document.getElementById('token').value;
+        
+        if (!email || !token) {
+            alert('الرجاء إدخال البريد والتوكن');
+            return;
+        }
+        
+        const accounts = JSON.parse(localStorage.getItem('accounts') || '[]');
+        accounts.push({ email, token, status: '⏳ جاري الفحص...' });
+        localStorage.setItem('accounts', JSON.stringify(accounts));
+        
+        document.getElementById('email').value = '';
+        document.getElementById('token').value = '';
+        loadAccounts();
+        
+        checkSingleToken(accounts.length - 1, token);
+    }
+    
+    async function checkSingleToken(index, token) {
+        try {
+            const response = await fetch('https://discord.com/api/v9/users/@me', {
+                headers: { Authorization: token }
+            });
+            
+            let status;
+            if (response.status === 200) status = '✅ شغال';
+            else if (response.status === 401) status = '❌ توكن فاسد';
+            else if (response.status === 403) status = '⛔ محظور';
+            else status = '⚠️ غير معروف';
+            
+            const accounts = JSON.parse(localStorage.getItem('accounts') || '[]');
+            if (accounts[index]) {
+                accounts[index].status = status;
+                localStorage.setItem('accounts', JSON.stringify(accounts));
+                loadAccounts();
+            }
+        } catch (error) {
+            const accounts = JSON.parse(localStorage.getItem('accounts') || '[]');
+            if (accounts[index]) {
+                accounts[index].status = '❌ خطأ';
+                localStorage.setItem('accounts', JSON.stringify(accounts));
+                loadAccounts();
+            }
+        }
+    }
+    
+    async function checkAllTokens() {
+        const accounts = JSON.parse(localStorage.getItem('accounts') || '[]');
+        
+        for (let i = 0; i < accounts.length; i++) {
+            accounts[i].status = '⏳ جاري الفحص...';
+            localStorage.setItem('accounts', JSON.stringify(accounts));
+            loadAccounts();
+            await checkSingleToken(i, accounts[i].token);
+            await new Promise(r => setTimeout(r, 500));
+        }
+    }
+    
+    function deleteAccount(index) {
+        const accounts = JSON.parse(localStorage.getItem('accounts') || '[]');
+        accounts.splice(index, 1);
+        localStorage.setItem('accounts', JSON.stringify(accounts));
+        loadAccounts();
+    }
+    
+    loadAccounts();
+</script>
+
+</body>
+</html>
